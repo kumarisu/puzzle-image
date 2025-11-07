@@ -12,308 +12,331 @@ interface ImagePair {
 interface Connection {
   leftId: string;
   rightId: string;
+  connectionId: number;
 }
 
 interface ImageMatchingProps {
   imagePairs: ImagePair[];
 }
 
-// Component để vẽ đường nối
-function ConnectionLine({ leftId, rightId, color, leftImages, rightImages }: { 
-  leftId: string; 
-  rightId: string; 
-  color: string;
-  leftImages: Array<{ id: string; image: string; label: string; originalPairId: string }>;
-  rightImages: Array<{ id: string; image: string; label: string; originalPairId: string }>;
-}) {
-  const leftIndex = leftImages.findIndex(img => img.id === leftId);
-  const rightIndex = rightImages.findIndex(img => img.id === rightId);
-  
-  // Tính toán vị trí dựa trên index (giả sử mỗi item cao 112px + khoảng cách 16px)
-  const itemHeight = 112 + 16; // height + gap
-  const startY = 50; // offset từ đầu
-  
-  const y1 = startY + (leftIndex * itemHeight) + (itemHeight / 2);
-  const y2 = startY + (rightIndex * itemHeight) + (itemHeight / 2);
-  
-  return (
-    <line
-      x1="0"
-      y1={y1}
-      x2="200"
-      y2={y2}
-      stroke={color}
-      strokeWidth="3"
-      strokeLinecap="round"
-    />
-  );
+// Màu sắc để phân biệt các cặp đã nối
+const CONNECTION_COLORS = [
+  { bg: "bg-red-200", border: "border-red-500", icon: "🔴", name: "red" },
+  { bg: "bg-blue-200", border: "border-blue-500", icon: "🔵", name: "blue" },
+  { bg: "bg-green-200", border: "border-green-500", icon: "🟢", name: "green" },
+  { bg: "bg-yellow-200", border: "border-yellow-500", icon: "🟡", name: "yellow" },
+  { bg: "bg-purple-200", border: "border-purple-500", icon: "🟣", name: "purple" },
+  { bg: "bg-pink-200", border: "border-pink-500", icon: "🩷", name: "pink" }
+];
+
+// Hàm để lấy số thứ tự cặp từ originalPairId
+const getPairNumber = (originalPairId: string, imagePairs: ImagePair[]) => {
+  return imagePairs.findIndex(pair => pair.id === originalPairId) + 1;
+};
+
+// Hàm shuffle array
+function shuffleArray<T>(array: T[]): T[] {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
 }
 
 export default function ImageMatching({ imagePairs }: ImageMatchingProps) {
-  const [leftImages, setLeftImages] = useState<Array<{ id: string; image: string; label: string; originalPairId: string }>>([]);
-  const [rightImages, setRightImages] = useState<Array<{ id: string; image: string; label: string; originalPairId: string }>>([]);
+  const [leftColumn, setLeftColumn] = useState<{id: string, image: string, label: string, originalPairId: string}[]>([]);
+  const [rightColumn, setRightColumn] = useState<{id: string, image: string, label: string, originalPairId: string}[]>([]);
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const [selectedRight, setSelectedRight] = useState<string | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const [results, setResults] = useState<{ correct: Connection[]; incorrect: Connection[] }>({ correct: [], incorrect: [] });
+  const [connectionCounter, setConnectionCounter] = useState(0);
 
   useEffect(() => {
-    // Tạo danh sách ảnh trái và phải, sau đó xáo trộn
-    const left = imagePairs.map((pair, index) => ({
+    // Tạo cột trái và cột phải
+    const leftImages = imagePairs.map(pair => ({
       id: `left-${pair.id}`,
       image: pair.leftImage,
       label: pair.leftLabel,
       originalPairId: pair.id
     }));
+
+    const rightImages = imagePairs.map(pair => ({
+      id: `right-${pair.id}`,
+      image: pair.rightImage, 
+      label: pair.rightLabel,
+      originalPairId: pair.id
+    }));
+
+    // Shuffle cả hai cột
+    setLeftColumn(shuffleArray(leftImages));
+    setRightColumn(shuffleArray(rightImages));
+  }, [imagePairs]);
+
+  const handleImageClick = (imageId: string, side: 'left' | 'right') => {
+    // Kiểm tra xem ảnh đã được nối chưa
+    const isConnected = connections.some(conn => conn.leftId === imageId || conn.rightId === imageId);
+    if (isConnected) return;
+
+    if (side === 'left') {
+      if (selectedLeft === imageId) {
+        setSelectedLeft(null);
+      } else {
+        setSelectedLeft(imageId);
+        // Nếu đã có ảnh phải được chọn, tạo kết nối ngay
+        if (selectedRight) {
+          const newConnection: Connection = {
+            leftId: imageId,
+            rightId: selectedRight,
+            connectionId: connectionCounter
+          };
+          setConnections(prev => [...prev, newConnection]);
+          setConnectionCounter(prev => prev + 1);
+          setSelectedLeft(null);
+          setSelectedRight(null);
+        }
+      }
+    } else {
+      if (selectedRight === imageId) {
+        setSelectedRight(null);
+      } else {
+        setSelectedRight(imageId);
+        // Nếu đã có ảnh trái được chọn, tạo kết nối ngay
+        if (selectedLeft) {
+          const newConnection: Connection = {
+            leftId: selectedLeft,
+            rightId: imageId,
+            connectionId: connectionCounter
+          };
+          setConnections(prev => [...prev, newConnection]);
+          setConnectionCounter(prev => prev + 1);
+          setSelectedLeft(null);
+          setSelectedRight(null);
+        }
+      }
+    }
+  };
+
+  const removeConnection = (connectionId: number) => {
+    setConnections(prev => prev.filter(conn => conn.connectionId !== connectionId));
+  };
+
+  const getConnectionColor = (imageId: string) => {
+    const connection = connections.find(conn => conn.leftId === imageId || conn.rightId === imageId);
+    if (!connection) return null;
     
-    const right = imagePairs.map((pair, index) => ({
+    return CONNECTION_COLORS[connection.connectionId % CONNECTION_COLORS.length];
+  };
+
+  const checkResults = () => {
+    setShowResults(true);
+  };
+
+  const resetGame = () => {
+    setConnections([]);
+    setSelectedLeft(null);
+    setSelectedRight(null);
+    setShowResults(false);
+    setConnectionCounter(0);
+    
+    // Shuffle lại cột
+    const leftImages = imagePairs.map(pair => ({
+      id: `left-${pair.id}`,
+      image: pair.leftImage,
+      label: pair.leftLabel,
+      originalPairId: pair.id
+    }));
+
+    const rightImages = imagePairs.map(pair => ({
       id: `right-${pair.id}`,
       image: pair.rightImage,
       label: pair.rightLabel,
       originalPairId: pair.id
     }));
 
-    // Xáo trộn vị trí
-    setLeftImages([...left].sort(() => Math.random() - 0.5));
-    setRightImages([...right].sort(() => Math.random() - 0.5));
-  }, [imagePairs]);
-
-  const handleImageClick = (id: string, side: 'left' | 'right') => {
-    if (side === 'left') {
-      if (selectedLeft === id) {
-        // Bỏ chọn nếu click vào ảnh đã chọn
-        setSelectedLeft(null);
-        return;
-      }
-      setSelectedLeft(id);
-    } else {
-      if (selectedRight === id) {
-        // Bỏ chọn nếu click vào ảnh đã chọn
-        setSelectedRight(null);
-        return;
-      }
-      setSelectedRight(id);
-    }
-
-    // Kiểm tra xem có cần tạo kết nối không
-    const currentLeft = side === 'left' ? id : selectedLeft;
-    const currentRight = side === 'right' ? id : selectedRight;
-
-    if (currentLeft && currentRight) {
-      // Kiểm tra xem đã có kết nối nào với 2 ảnh này chưa
-      const existingConnectionIndex = connections.findIndex(
-        conn => conn.leftId === currentLeft || conn.rightId === currentRight
-      );
-
-      if (existingConnectionIndex !== -1) {
-        // Xóa kết nối cũ
-        const newConnections = connections.filter((_, index) => index !== existingConnectionIndex);
-        setConnections(newConnections);
-      }
-
-      // Tạo kết nối mới
-      const newConnection: Connection = {
-        leftId: currentLeft,
-        rightId: currentRight
-      };
-
-      setConnections([...connections.filter(conn => 
-        conn.leftId !== currentLeft && conn.rightId !== currentRight
-      ), newConnection]);
-
-      // Reset selection
-      setSelectedLeft(null);
-      setSelectedRight(null);
-    }
+    setLeftColumn(shuffleArray(leftImages));
+    setRightColumn(shuffleArray(rightImages));
   };
 
-  const checkResults = () => {
-    const correct: Connection[] = [];
-    const incorrect: Connection[] = [];
-
-    connections.forEach(connection => {
-      const leftItem = leftImages.find(img => img.id === connection.leftId);
-      const rightItem = rightImages.find(img => img.id === connection.rightId);
-
-      if (leftItem && rightItem && leftItem.originalPairId === rightItem.originalPairId) {
-        correct.push(connection);
-      } else {
-        incorrect.push(connection);
-      }
-    });
-
-    setResults({ correct, incorrect });
-    setShowResults(true);
-  };
-
-  const resetGame = () => {
-    setConnections([]);
-    setShowResults(false);
-    setResults({ correct: [], incorrect: [] });
-    setSelectedLeft(null);
-    setSelectedRight(null);
+  const isCorrectConnection = (connection: Connection) => {
+    const leftImage = leftColumn.find(img => img.id === connection.leftId);
+    const rightImage = rightColumn.find(img => img.id === connection.rightId);
     
-    // Xáo trộn lại vị trí
-    setLeftImages(prev => [...prev].sort(() => Math.random() - 0.5));
-    setRightImages(prev => [...prev].sort(() => Math.random() - 0.5));
+    return leftImage?.originalPairId === rightImage?.originalPairId;
   };
 
-  const getConnectionColor = (connection: Connection) => {
-    if (!showResults) return "#3B82F6"; // Blue default
-    if (results.correct.some(c => c.leftId === connection.leftId && c.rightId === connection.rightId)) {
-      return "#10B981"; // Green for correct
-    }
-    return "#EF4444"; // Red for incorrect
-  };
-
-  const getImageBorderColor = (id: string, side: 'left' | 'right') => {
-    const isSelected = (side === 'left' && selectedLeft === id) || (side === 'right' && selectedRight === id);
-    if (isSelected) return "border-blue-500 border-4";
-    
-    if (showResults) {
-      const connection = connections.find(conn => 
-        conn.leftId === id || conn.rightId === id
-      );
-      if (connection) {
-        const isCorrect = results.correct.some(c => 
-          c.leftId === connection.leftId && c.rightId === connection.rightId
-        );
-        return isCorrect ? "border-green-500 border-2" : "border-red-500 border-2";
-      }
-    }
-    
-    return "border-gray-300 border-2";
+  const getCorrectPairs = () => {
+    return connections.filter(conn => isCorrectConnection(conn)).length;
   };
 
   return (
-    <div className="flex flex-col items-center space-y-6 p-6">
-      <h2 className="text-2xl font-bold text-gray-800">Nối ảnh đúng cặp</h2>
+    <div className="w-full max-w-7xl mx-auto p-6">
+      {/* Hướng dẫn */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <h2 className="text-xl font-bold mb-2">Hướng dẫn chơi:</h2>
+        <p className="text-gray-700">
+          Nhấp vào một ảnh ở cột A, sau đó nhấp vào ảnh tương ứng ở cột B để tạo kết nối. 
+          Sau khi hoàn thành, nhấn "Kiểm tra kết quả" để xem kết quả.
+        </p>
+      </div>
       
-      <div className="relative flex justify-between w-full max-w-4xl">
+      <div className="relative flex justify-center w-full max-w-7xl gap-8">
         {/* Cột trái */}
-        <div className="flex flex-col space-y-4 w-2/5">
+        <div className="flex flex-col space-y-4 w-[40%]">
           <h3 className="text-lg font-semibold text-center">Cột A</h3>
-          {leftImages.map((item, index) => (
-            <div
-              key={item.id}
-              data-id={item.id}
-              className={`cursor-pointer rounded-lg overflow-hidden transition-all ${getImageBorderColor(item.id, 'left')}`}
-              onClick={() => handleImageClick(item.id, 'left')}
-            >
-              <img
-                src={item.image}
-                alt={item.label}
-                className="w-full h-24 object-cover"
-              />
-              <div className="p-2 bg-white">
-                <p className="text-sm text-center font-medium">{item.label}</p>
+          {leftColumn.map((image) => {
+            const color = getConnectionColor(image.id);
+            const isSelected = selectedLeft === image.id;
+            const connection = connections.find(conn => conn.leftId === image.id);
+            const isCorrect = connection ? isCorrectConnection(connection) : null;
+            
+            return (
+              <div
+                key={image.id}
+                className={`
+                  relative cursor-pointer transition-all duration-200 rounded-lg overflow-hidden border-4
+                  ${isSelected ? 'border-blue-500 shadow-lg' : 
+                    showResults && connection ?
+                      (isCorrect ? 'border-green-500' : 'border-red-500') :
+                    color ? `${color.border}` : 'border-gray-300 hover:border-gray-400'}
+                  ${color && !showResults ? color.bg : ''}
+                `}
+                onClick={() => handleImageClick(image.id, 'left')}
+              >
+                <img 
+                  src={image.image} 
+                  alt={image.label}
+                  className="w-full h-24 object-cover"
+                />
+                <div className="p-2 bg-white">
+                  <p className="text-sm font-medium text-center">{image.label}</p>
+                </div>
+                
+                {/* Badge hiển thị số cặp khi đã kiểm tra kết quả */}
+                {showResults && connection && (
+                  <div className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {getPairNumber(leftColumn.find(img => img.id === image.id)?.originalPairId || '', imagePairs)}
+                  </div>
+                )}
+                
+                {/* Hiển thị số thứ tự kết nối khi chưa kiểm tra */}
+                {!showResults && color && (
+                  <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center text-sm font-bold">
+                    {connection?.connectionId !== undefined ? (connection.connectionId + 1) : ''}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Khu vực vẽ đường nối */}
-        <div className="relative w-1/5 flex items-center justify-center">
-          <svg
-            width="100%"
-            height="400px"
-            className="absolute"
-            style={{ zIndex: 10 }}
-            viewBox="0 0 200 400"
-          >
-            {connections.map((connection, index) => (
-              <ConnectionLine
-                key={`${connection.leftId}-${connection.rightId}`}
-                leftId={connection.leftId}
-                rightId={connection.rightId}
-                color={getConnectionColor(connection)}
-                leftImages={leftImages}
-                rightImages={rightImages}
-              />
-            ))}
-          </svg>
+            );
+          })}
         </div>
 
         {/* Cột phải */}
-        <div className="flex flex-col space-y-4 w-2/5">
+        <div className="flex flex-col space-y-4 w-[40%]">
           <h3 className="text-lg font-semibold text-center">Cột B</h3>
-          {rightImages.map((item, index) => (
-            <div
-              key={item.id}
-              data-id={item.id}
-              className={`cursor-pointer rounded-lg overflow-hidden transition-all ${getImageBorderColor(item.id, 'right')}`}
-              onClick={() => handleImageClick(item.id, 'right')}
-            >
-              <img
-                src={item.image}
-                alt={item.label}
-                className="w-full h-24 object-cover"
-              />
-              <div className="p-2 bg-white">
-                <p className="text-sm text-center font-medium">{item.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Buttons */}
-      <div className="flex space-x-4">
-        <button
-          onClick={checkResults}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-          disabled={connections.length === 0}
-        >
-          Kiểm tra kết quả
-        </button>
-        <button
-          onClick={resetGame}
-          className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-        >
-          Chơi lại
-        </button>
-      </div>
-
-      {/* Results */}
-      {showResults && (
-        <div className="mt-6 p-4 bg-gray-100 rounded-lg w-full max-w-2xl">
-          <h3 className="text-lg font-bold mb-4">Kết quả:</h3>
-          <div className="space-y-2">
-            <p className="text-green-600 font-semibold">
-              ✅ Đúng: {results.correct.length}/{imagePairs.length}
-            </p>
-            <p className="text-red-600 font-semibold">
-              ❌ Sai: {results.incorrect.length}
-            </p>
+          {rightColumn.map((image) => {
+            const color = getConnectionColor(image.id);
+            const isSelected = selectedRight === image.id;
+            const connection = connections.find(conn => conn.rightId === image.id);
+            const isCorrect = connection ? isCorrectConnection(connection) : null;
             
-            {results.correct.length === imagePairs.length && (
-              <p className="text-xl text-green-600 font-bold animate-bounce mt-4">
-                🎉 Hoàn thành xuất sắc! 🎉
-              </p>
-            )}
-
-            {/* Hiển thị đáp án đúng cho những cặp sai */}
-            {results.incorrect.length > 0 && (
-              <div className="mt-4">
-                <p className="font-semibold text-gray-700 mb-2">Đáp án đúng:</p>
-                {imagePairs.map((pair) => {
-                  const leftItem = leftImages.find(img => img.originalPairId === pair.id);
-                  const rightItem = rightImages.find(img => img.originalPairId === pair.id);
-                  
-                  return (
-                    <div key={pair.id} className="flex items-center space-x-2 text-sm text-gray-600">
-                      <span>{leftItem?.label}</span>
-                      <span>↔</span>
-                      <span>{rightItem?.label}</span>
-                    </div>
-                  );
-                })}
+            return (
+              <div
+                key={image.id}
+                className={`
+                  relative cursor-pointer transition-all duration-200 rounded-lg overflow-hidden border-4
+                  ${isSelected ? 'border-blue-500 shadow-lg' : 
+                    showResults && connection ?
+                      (isCorrect ? 'border-green-500' : 'border-red-500') :
+                    color ? `${color.border}` : 'border-gray-300 hover:border-gray-400'}
+                  ${color && !showResults ? color.bg : ''}
+                `}
+                onClick={() => handleImageClick(image.id, 'right')}
+              >
+                <img 
+                  src={image.image} 
+                  alt={image.label}
+                  className="w-full h-24 object-cover"
+                />
+                <div className="p-2 bg-white">
+                  <p className="text-sm font-medium text-center">{image.label}</p>
+                </div>
+                
+                {/* Badge hiển thị số cặp khi đã kiểm tra kết quả */}
+                {showResults && connection && (
+                  <div className={`absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                    {getPairNumber(rightColumn.find(img => img.id === image.id)?.originalPairId || '', imagePairs)}
+                  </div>
+                )}
+                
+                {/* Hiển thị số thứ tự kết nối khi chưa kiểm tra */}
+                {!showResults && color && (
+                  <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-gray-800 text-white flex items-center justify-center text-sm font-bold">
+                    {connection?.connectionId !== undefined ? (connection.connectionId + 1) : ''}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      {/* Khu vực điều khiển và thông tin - di chuyển xuống dưới */}
+      <div className="mt-8 flex flex-col items-center space-y-4">
+        {/* Hiển thị các kết nối */}
+        <div className="flex flex-wrap justify-center gap-2">
+          {connections.map((connection) => {
+            const color = CONNECTION_COLORS[connection.connectionId % CONNECTION_COLORS.length];
+            return (
+              <button
+                key={connection.connectionId}
+                onClick={() => removeConnection(connection.connectionId)}
+                className={`px-3 py-1 rounded-full text-white text-sm font-medium hover:opacity-80 ${color.border.replace('border-', 'bg-')}`}
+                title="Nhấp để xóa kết nối"
+              >
+                {connection.connectionId + 1}
+              </button>
+            );
+          })}
+        </div>
+        
+        {/* Nút điều khiển */}
+        <div className="flex space-x-4">
+          <button
+            onClick={checkResults}
+            disabled={connections.length === 0}
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Kiểm tra kết quả
+          </button>
+          
+          <button
+            onClick={resetGame}
+            className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+          >
+            Chơi lại
+          </button>
+        </div>
+
+        {/* Hiển thị kết quả */}
+        {showResults && (
+          <div className="p-4 bg-green-100 rounded-lg">
+            <p className="text-lg font-semibold text-green-800 text-center">
+              Kết quả: {getCorrectPairs()}/{connections.length} cặp đúng
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Chú thích ở dưới */}
+      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <h3 className="text-lg font-semibold mb-2">Chú thích:</h3>
+        <div className="space-y-1 text-sm text-gray-600">
+          <p>• <span className="font-medium">Số trong vòng tròn đen:</span> Thứ tự kết nối bạn đã tạo</p>
+          <p>• <span className="font-medium">Số trong vòng tròn xanh/đỏ:</span> Số thứ tự cặp đúng sau khi kiểm tra (xanh = đúng, đỏ = sai)</p>
+          <p>• <span className="font-medium">Viền xanh lá/đỏ:</span> Màu viền sau khi kiểm tra kết quả</p>
+        </div>
+      </div>
     </div>
   );
 }
