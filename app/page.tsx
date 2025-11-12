@@ -3,8 +3,9 @@ import { useState } from "react";
 import PuzzleGame from "./components/PuzzleGame";
 import ImageMatchingGame from "./components/ImageMatchingGame";
 import FlashcardGame from "./components/FlashcardGame";
+import FlappyBirdGame from "./components/FlappyBirdGame";
 
-type GameType = 'home' | 'puzzle' | 'matching' | 'flashcard';
+type GameType = 'home' | 'puzzle' | 'matching' | 'flashcard' | 'flappybird';
 
 export default function Page() {
   const [currentScreen, setCurrentScreen] = useState<GameType>('home');
@@ -24,6 +25,10 @@ export default function Page() {
     return <FlashcardGame onBack={goHome} />;
   }
 
+  if (currentScreen === 'flappybird') {
+    return <FlappyBirdGame onBack={goHome} />;
+  }
+
   // Màn hình chính
   return (
     <main className="flex flex-col items-center justify-center min-h-screen p-4 bg-gradient-to-b from-blue-50 to-blue-100">
@@ -38,7 +43,7 @@ export default function Page() {
       </div>
 
       {/* Game Selection */}
-      <div className="grid md:grid-cols-3 gap-8 max-w-4xl w-full">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl w-full">
         {/* Puzzle Game */}
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center hover:shadow-xl transition-all duration-300 hover:scale-105">
           <div className="text-6xl mb-4">🧩</div>
@@ -79,6 +84,21 @@ export default function Page() {
           <button
             onClick={() => setCurrentScreen('flashcard')}
             className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+          >
+            Bắt đầu chơi
+          </button>
+        </div>
+
+        {/* Flappy Bird Game */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center hover:shadow-xl transition-all duration-300 hover:scale-105">
+          <div className="text-6xl mb-4">🐦</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Flappy Bird</h2>
+          <p className="text-gray-600 mb-6">
+            Điều khiển chú chim bay qua các chướng ngại vật để ghi điểm cao
+          </p>
+          <button
+            onClick={() => setCurrentScreen('flappybird')}
+            className="w-full px-6 py-3 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors"
           >
             Bắt đầu chơi
           </button>
